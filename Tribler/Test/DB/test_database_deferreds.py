@@ -39,6 +39,7 @@ class TestDatabaseDeferreds(AbstractServer):
         self.sqlite_test.initialize(self.db_path)
 
     def tearDown(self):
+        self.delete_table()
         super(TestDatabaseDeferreds, self).tearDown()
         self.sqlite_test.close()
         self.sqlite_test = None
@@ -49,66 +50,71 @@ class TestDatabaseDeferreds(AbstractServer):
         sql = u"CREATE TABLE IF NOT EXISTS unit_test(id INTEGER NOT NULL);"
         self.sqlite_test.execute(sql)
 
-    def test_synchrnous_calls(self):
+    def test_synchronous_calls(self):
         for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE, self.STEP_SIZE):
             self.test_create_db()
             random.seed(1337)
-            start_time = time.time()
 
-            for i in range(0, s):
+            for i in range(0, self.STEP_SIZE):
                 id = random.randint(0, self.MAX_ID)
                 self.add_id(id)
 
-            for i in range(0, self.NUM_QUERIES):
-                if i % 2 == 0:
-                    self.print_item(self.get_count())
-                else:
-                    self.print_item(self.get_unique_count)
+            def query_time(self):
+                for i in range(0, self.NUM_QUERIES):
+                    if i % 2 == 0:
+                        self.print_item(self.get_count())
+                    else:
+                        self.print_item(self.get_unique_count())
+
+            start_time = time.time()
+            query_time(self)
 
             print "synchronous %s %s" % (s, (time.time() - start_time))
-            self.delete_table()
 
     def test_asynchrnous_calls(self):
         for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE, self.STEP_SIZE):
             self.test_create_db()
             random.seed(1337)
-            start_time = time.time()
 
-            for i in range(0, s):
+            for i in range(0, self.STEP_SIZE):
                 id = random.randint(0, self.MAX_ID)
                 self.add_id(id)
 
-            for i in range(0, self.NUM_QUERIES):
-                if i % 2 == 0:
-                    d = Deferred(self.get_count)
-                    d.addCallback(self.print_item)
-                else:
-                    d = Deferred(self.get_unique_count)
-                    d.addCallback(self.print_item)
+            def query_time(self):
+                for i in range(0, self.NUM_QUERIES):
+                    if i % 2 == 0:
+                        d = Deferred(self.get_count)
+                        d.addCallback(self.print_item)
+                    else:
+                        d = Deferred(self.get_unique_count)
+                        d.addCallback(self.print_item)
+
+            start_time = time.time()
+            query_time(self)
 
             print "asynchronous %s %s" % (s, (time.time() - start_time))
-            self.delete_table()
 
     def test_async_defertoThread(self):
         for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE, self.STEP_SIZE):
             self.test_create_db()
             random.seed(1337)
-            start_time = time.time()
 
-            for i in range(0, s):
+            for i in range(0, self.STEP_SIZE):
                 id = random.randint(0, self.MAX_ID)
                 self.add_id(id)
 
-            for i in range(0, self.NUM_QUERIES):
-                if i % 2 == 0:
-                    d = threads.deferToThread(self.get_count)
-                    d.addCallback(self.print_item)
-                else:
-                    d = threads.deferToThread(self.get_unique_count)
-                    d.addCallback(self.print_item)
+            start_time = time.time()
+
+            def query_time(self):
+                for i in range(0, self.NUM_QUERIES):
+                    if i % 2 == 0:
+                        d = threads.deferToThread(self.get_count)
+                        d.addCallback(self.print_item)
+                    else:
+                        d = threads.deferToThread(self.get_unique_count)
+                        d.addCallback(self.print_item)
 
             print "defertothread %s %s" % (s, (time.time() - start_time))
-            self.delete_table()
 
     def print_item(self, item):
         pass
