@@ -7,6 +7,7 @@ from Tribler.Core.SessionConfig import SessionStartupConfig
 from Tribler.Core.CacheDB.sqlitecachedb import SQLiteCacheDB
 
 from twisted.internet.defer import Deferred
+from twisted.internet import threads
 
 
 class TestDatabaseDeferreds(AbstractServer):
@@ -62,7 +63,7 @@ class TestDatabaseDeferreds(AbstractServer):
                 if i % 2 == 0:
                     self.print_item(self.get_count())
                 else:
-                    self.print_item(self.get_unique_count())
+                    self.print_item(self.get_unique_count)
 
             print "synchronous %s %s" % (s, (time.time() - start_time))
             self.delete_table()
@@ -82,10 +83,31 @@ class TestDatabaseDeferreds(AbstractServer):
                     d = Deferred(self.get_count)
                     d.addCallback(self.print_item)
                 else:
-                    d = Deferred(self.get_unique_count())
+                    d = Deferred(self.get_unique_count)
                     d.addCallback(self.print_item)
 
             print "asynchronous %s %s" % (s, (time.time() - start_time))
+            self.delete_table()
+
+    def test_async_defertoThread(self):
+        for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE, self.STEP_SIZE):
+            self.test_create_db()
+            random.seed(1337)
+            start_time = time.time()
+
+            for i in range(0, s):
+                id = random.randint(0, self.MAX_ID)
+                self.add_id(id)
+
+            for i in range(0, self.NUM_QUERIES):
+                if i % 2 == 0:
+                    d = threads.deferToThread(self.get_count)
+                    d.addCallback(self.print_item)
+                else:
+                    d = threads.deferToThread(self.get_unique_count)
+                    d.addCallback(self.print_item)
+
+            print "defertothread %s %s" % (s, (time.time() - start_time))
             self.delete_table()
 
     def print_item(self, item):
