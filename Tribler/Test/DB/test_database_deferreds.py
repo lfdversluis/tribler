@@ -51,7 +51,9 @@ class TestDatabaseDeferreds(AbstractServer):
         self.sqlite_test.execute(sql)
 
     def test_synchronous_calls(self):
-        for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE, self.STEP_SIZE):
+        self.counter = 0
+        self.global_time = time.time()
+        for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE +1, self.STEP_SIZE):
             self.test_create_db()
             random.seed(1337)
 
@@ -70,9 +72,12 @@ class TestDatabaseDeferreds(AbstractServer):
             query_time(self)
 
             print "synchronous %s %s" % (s, (time.time() - start_time))
+        print self.counter
 
     def test_asynchrnous_calls(self):
-        for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE, self.STEP_SIZE):
+        self.global_time = time.time()
+        self.counter = 0
+        for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE + 1, self.STEP_SIZE):
             self.test_create_db()
             random.seed(1337)
 
@@ -95,15 +100,15 @@ class TestDatabaseDeferreds(AbstractServer):
             print "asynchronous %s %s" % (s, (time.time() - start_time))
 
     def test_async_defertoThread(self):
-        for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE, self.STEP_SIZE):
+        self.global_time = time.time()
+        self.counter = 0
+        for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE + 1, self.STEP_SIZE):
             self.test_create_db()
             random.seed(1337)
 
             for i in range(0, self.STEP_SIZE):
                 id = random.randint(0, self.MAX_ID)
                 self.add_id(id)
-
-            start_time = time.time()
 
             def query_time(self):
                 for i in range(0, self.NUM_QUERIES):
@@ -114,10 +119,15 @@ class TestDatabaseDeferreds(AbstractServer):
                         d = threads.deferToThread(self.get_unique_count)
                         d.addCallback(self.print_item)
 
+            start_time = time.time()
+            query_time(self)
+
             print "defertothread %s %s" % (s, (time.time() - start_time))
 
     def print_item(self, item):
-        pass
+        self.counter += 1
+        if self.counter == (self.END_INSTANCE_SIZE / self.STEP_SIZE) * self.NUM_QUERIES:
+            print "done %s" % ((time.time() - self.global_time))
 
     def add_id(self, id):
         self.sqlite_test.insert('unit_test', id=id)
