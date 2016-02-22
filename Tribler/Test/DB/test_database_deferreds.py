@@ -1,5 +1,5 @@
 import time
-from random import randint
+import random
 
 from Tribler.Test.test_as_server import AbstractServer
 from Tribler.Core.Session import Session
@@ -51,28 +51,30 @@ class TestDatabaseDeferreds(AbstractServer):
     def test_synchrnous_calls(self):
         for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE, self.STEP_SIZE):
             self.test_create_db()
+            random.seed(1337)
             start_time = time.time()
 
             for i in range(0, s):
-                id = randint(0, self.MAX_ID)
+                id = random.randint(0, self.MAX_ID)
                 self.add_id(id)
 
             for i in range(0, self.NUM_QUERIES):
                 if i % 2 == 0:
-                    ignored = self.get_count()
+                    self.print_item(self.get_count())
                 else:
-                    ignored = self.get_unique_count()
+                    self.print_item(self.get_unique_count())
 
-            print "synchronous %s %s\n" % (s, (time.time() - start_time))
+            print "synchronous %s %s" % (s, (time.time() - start_time))
             self.delete_table()
 
     def test_asynchrnous_calls(self):
         for s in range(self.BEGIN_INSTANCE_SIZE, self.END_INSTANCE_SIZE, self.STEP_SIZE):
             self.test_create_db()
+            random.seed(1337)
             start_time = time.time()
 
             for i in range(0, s):
-                id = randint(0, self.MAX_ID)
+                id = random.randint(0, self.MAX_ID)
                 self.add_id(id)
 
             for i in range(0, self.NUM_QUERIES):
@@ -83,7 +85,7 @@ class TestDatabaseDeferreds(AbstractServer):
                     d = Deferred(self.get_unique_count())
                     d.addCallback(self.print_item)
 
-            print "asynchronous %s %s\n" % (s, (time.time() - start_time))
+            print "asynchronous %s %s" % (s, (time.time() - start_time))
             self.delete_table()
 
     def print_item(self, item):
