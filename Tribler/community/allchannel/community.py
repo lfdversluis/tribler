@@ -619,6 +619,8 @@ class ChannelCastDBStub():
         self.latest_result = time()
 
     def setChannelId(self, channel_id, mychannel):
+        import traceback
+        traceback.print_stack()
         self.channel_id = channel_id
         self.mychannel = mychannel
 
