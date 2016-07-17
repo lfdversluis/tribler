@@ -583,6 +583,8 @@ class ChannelCastDBStub():
                 yield message.community.cid, message
 
     def getChannelIdFromDispersyCID(self, cid):
+        import traceback
+        traceback.print_stack()
         return self.channel_id
 
     def getCountMaxFromChannelId(self, channel_id):
