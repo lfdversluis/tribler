@@ -166,6 +166,9 @@ class AllChannelCommunity(Community):
         assert isInIOThread()
         now = time()
 
+        import traceback
+        traceback.print_stack()
+
         self._logger.error(1)
 
         favoriteTorrents = None
