@@ -166,6 +166,8 @@ class AllChannelCommunity(Community):
         assert isInIOThread()
         now = time()
 
+        self._logger.error(1)
+
         favoriteTorrents = None
         normalTorrents = None
 
@@ -181,9 +183,11 @@ class AllChannelCommunity(Community):
             if not candidate:
                 continue
 
+            self._logger.error("Found a candidate to send channelcast to %s", candidate)
             didFavorite = False
             # only check if we actually have a channel
             if mychannel_id:
+                self._logger.error(2)
                 peer_ids = set()
                 key = candidate.get_member().public_key
                 peer_ids.add(self._peer_db.addOrGetPeerID(key))
@@ -208,6 +212,7 @@ class AllChannelCommunity(Community):
 
             # torrents is a dictionary of channel_id (key) and infohashes (value)
             if len(torrents) > 0:
+                self._logger.error(3)
                 meta = self.get_meta_message(u"channelcast")
                 message = meta.impl(authentication=(self._my_member,),
                                     distribution=(self.global_time,), destination=(candidate,), payload=(torrents,))
