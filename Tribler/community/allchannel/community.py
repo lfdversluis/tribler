@@ -1,3 +1,4 @@
+import logging
 from random import sample
 from time import time
 
@@ -618,6 +619,8 @@ class ChannelCastDBStub():
         return torrents
 
     def newTorrent(self, message):
+        logger = logging.getLogger(self.__class__.__name__)
+        logger.error("newTorrent called")
         self._cachedTorrents[message.payload.infohash] = message
 
         self.recentTorrents.append((message.distribution.global_time, message.payload))
