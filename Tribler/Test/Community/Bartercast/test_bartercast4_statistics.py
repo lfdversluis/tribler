@@ -1,3 +1,7 @@
+from twisted.internet.defer import inlineCallbacks
+
+from nose.twistedtools import deferred
+
 from Tribler.Test.test_as_server import AbstractServer
 from Tribler.dispersy.util import blocking_call_on_reactor_thread
 from Tribler.community.bartercast4.statistics import BarterStatistics, BartercastStatisticTypes
@@ -59,7 +63,9 @@ class TestBarterStatistics(AbstractServer):
         assert not self.stats.should_persist(BartercastStatisticTypes.TUNNELS_EXIT_BYTES_SENT, 2)
         assert self.stats.should_persist(BartercastStatisticTypes.TUNNELS_EXIT_BYTES_SENT, 2)
 
+    @deferred(timeout=10)
     @blocking_call_on_reactor_thread
+    @inlineCallbacks
     def test_load_persist(self):
         self.stats.dict_inc_bartercast(BartercastStatisticTypes.TUNNELS_EXIT_BYTES_RECEIVED, self._peer1, 5)
         self.stats.dict_inc_bartercast(BartercastStatisticTypes.TUNNELS_EXIT_BYTES_RECEIVED, self._peer2, 5)
@@ -67,16 +73,18 @@ class TestBarterStatistics(AbstractServer):
         self.stats.dict_inc_bartercast(BartercastStatisticTypes.TUNNELS_EXIT_BYTES_RECEIVED, self._peer4, 10)
         self.stats.dict_inc_bartercast(BartercastStatisticTypes.TUNNELS_EXIT_BYTES_RECEIVED, self._peer5, 15)
         assert len(self.stats.bartercast[BartercastStatisticTypes.TUNNELS_EXIT_BYTES_RECEIVED]) == 5
-        self.stats.persist(self.dispersy, 1)
-        self.stats.db.close()
+        yield self.stats.persist(self.dispersy, 1)
+        yield self.stats.db.close()
         self.stats = BarterStatistics()
         assert len(self.stats.bartercast[BartercastStatisticTypes.TUNNELS_EXIT_BYTES_RECEIVED]) == 0
-        self.stats.load_statistics(self.dispersy)
+        yield self.stats.load_statistics(self.dispersy)
         assert len(self.stats.bartercast[BartercastStatisticTypes.TUNNELS_EXIT_BYTES_RECEIVED]) == 5
 
+    @deferred(timeout=10)
     @blocking_call_on_reactor_thread
+    @inlineCallbacks
     def test_log_interaction(self):
-        self.stats.log_interaction(self.dispersy, BartercastStatisticTypes.TUNNELS_EXIT_BYTES_RECEIVED,
+        yield self.stats.log_interaction(self.dispersy, BartercastStatisticTypes.TUNNELS_EXIT_BYTES_RECEIVED,
                                    self._peer1, self._peer2, 123)
 
         records = self.stats.db.execute(u"SELECT type, peer1, peer2, value FROM interaction_log")

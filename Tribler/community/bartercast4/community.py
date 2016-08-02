@@ -42,16 +42,16 @@ class BarterCommunity(Community):
         super(BarterCommunity, self).__init__(dispersy, master, my_member)
         self._dispersy = dispersy
         log.msg("joined BC community")
-        self.init_database()
 
         # add task for persisting bartercast statistics every BARTERCAST_PERSIST_INTERVAL seconds
         self._logger.debug("bartercast persist task started")
         self.register_task("bartercast persist",
                            LoopingCall(self.backup_bartercast_statistics)).start(BARTERCAST_PERSIST_INTERVAL, now=False)
 
+    @inlineCallbacks
     def init_database(self):
         log.msg("loading BC statistics from database")
-        _barter_statistics.load_statistics(self._dispersy)
+        yield _barter_statistics.load_statistics(self._dispersy)
 
     def initiate_meta_messages(self):
         return super(BarterCommunity, self).initiate_meta_messages() + [
@@ -73,8 +73,11 @@ class BarterCommunity(Community):
                     self.on_stats_response)
         ]
 
+    @inlineCallbacks
+    # TODO(Laurens): Check callers
     def initialize(self, integrate_with_tribler=False, auto_join_channel=False):
-        super(BarterCommunity, self).initialize()
+        yield self.init_database()
+        yield super(BarterCommunity, self).initialize()
 
     def initiate_conversions(self):
         return [DefaultConversion(self), StatisticsConversion(self)]
@@ -128,22 +131,25 @@ class BarterCommunity(Community):
             else:
                 yield DelayMessageByProof(message)
 
+    @inlineCallbacks
     def on_stats_response(self, messages):
         log.msg("IN: stats-response")
         for message in messages:
             log.msg("stats-response: %s %s %s"
                                % (message._distribution.global_time, message.payload.stats_type, message.payload.records))
             for r in message.payload.records:
-                _barter_statistics.log_interaction(self._dispersy,
+               yield _barter_statistics.log_interaction(self._dispersy,
                                                            message.payload.stats_type,
                                                            "%s:%s" % (message.candidate.sock_addr[0], message.candidate.sock_addr[1]),
                                                            r[0], int(r[1].encode('hex'), 16))
 
     # bartercast accounting stuff
+    @inlineCallbacks
     def backup_bartercast_statistics(self):
         self._logger.debug("merging bartercast statistics")
-        _barter_statistics.persist(self._dispersy)
+        yield _barter_statistics.persist(self._dispersy)
 
+    @inlineCallbacks
     def unload_community(self):
         self._logger.debug("unloading the Barter4 community")
         # store last cached statistics
@@ -152,7 +158,7 @@ class BarterCommunity(Community):
         # self.backup_bartercast_statistics()
 
         # close database
-        _barter_statistics.close()
+        yield _barter_statistics.close()
         super(BarterCommunity, self).unload_community()
 
 

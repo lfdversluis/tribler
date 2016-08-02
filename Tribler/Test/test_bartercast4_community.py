@@ -52,7 +52,8 @@ class TestBarterCommunity(TestAsServer):
 
         def do_stats_messages():
             # check if the crawler receives messages
-            if len(_barter_statistics.get_interactions(self.dispersy)):
+            interactions = yield _barter_statistics.get_interactions(self.dispersy)
+            if len(interactions):
                 # Some bartercast statistic was crawled.
                 self._test_condition_lc.stop()
                 self.quit()

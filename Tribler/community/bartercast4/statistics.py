@@ -1,10 +1,12 @@
-from Tribler.dispersy.database import Database
 import random
 from operator import itemgetter
 from collections import defaultdict
 from os import path
 from threading import RLock
 import logging
+from twisted.internet.defer import inlineCallbacks, returnValue
+
+from Tribler.dispersy.dispersydatabase import DispersyDatabase
 
 
 class BarterStatistics(object):
@@ -56,18 +58,22 @@ class BarterStatistics(object):
                 return top_stats + random_stats
             return None
 
+    @inlineCallbacks
     def log_interaction(self, dispersy, type, peer1, peer2, value):
         """
         Add statistic for interactions between peer1 and peer2 to the interaction log.
         """
-        self._init_database(dispersy)
-        self.db.execute(u"INSERT INTO interaction_log (peer1, peer2, type, value, date) values (?, ?, ?, ?, strftime('%s', 'now'))", (unicode(peer1), unicode(peer2), type, value))
+        yield self._init_database(dispersy)
+        yield self.db.execute(u"INSERT INTO interaction_log (peer1, peer2, type, value, date) values (?, ?, ?, ?, strftime('%s', 'now'))", (unicode(peer1), unicode(peer2), type, value))
 
+    @inlineCallbacks
     def get_interactions(self, dispersy):
-        self._init_database(dispersy)
+        yield self._init_database(dispersy)
         sql = u"SELECT peer1, peer2, type, value, date FROM interaction_log GROUP BY peer1,peer2"
-        return self.db.execute(sql).fetchall()
+        res = yield self.db.fetchall(sql)
+        returnValue(res)
 
+    @inlineCallbacks
     def persist(self, dispersy, key=None, n=1):
         """
         Persists the statistical data with name 'key' in the statistics database.
@@ -77,19 +83,20 @@ class BarterStatistics(object):
         if not self.should_persist(key, n):
             return
 
-        self._init_database(dispersy)
+        yield self._init_database(dispersy)
         self._logger.debug("persisting bc data")
         for t in self.bartercast:
             for peer in self.bartercast[t]:
-                self.db.execute(u"INSERT OR REPLACE INTO statistic (type, peer, value) values (?, ?, ?)", (t, unicode(peer), self.bartercast[t][peer]))
+                yield self.db.execute(u"INSERT OR REPLACE INTO statistic (type, peer, value) values (?, ?, ?)", (t, unicode(peer), self.bartercast[t][peer]))
         self._logger.debug("data persisted")
 
+    @inlineCallbacks
     def load_statistics(self, dispersy):
         """
         Loads the bartercast statistics from the sqlite database.
         """
-        self._init_database(dispersy)
-        data = self.db.execute(u"SELECT type, peer, value FROM statistic")
+        yield self._init_database(dispersy)
+        data = yield self.db.fetchall(u"SELECT type, peer, value FROM statistic")
         statistics = defaultdict()
         for t in BartercastStatisticTypes.reverse_mapping:
             statistics[t] = defaultdict()
@@ -101,15 +108,16 @@ class BarterStatistics(object):
                 statistics[t] = defaultdict()
             statistics[t][peer] = value
         self.bartercast = statistics
-        return statistics
+        returnValue(statistics)
 
+    @inlineCallbacks
     def _init_database(self, dispersy):
         """
         Initialise database for use in this class.
         """
         if self.db is None or self.db_closed:
             self.db = StatisticsDatabase(dispersy)
-            self.db.open()
+            yield self.db.open()
             self.db_closed = False
 
     def should_persist(self, key, n):
@@ -161,7 +169,7 @@ DELETE FROM statistic;
 """
 
 
-class StatisticsDatabase(Database):
+class StatisticsDatabase(DispersyDatabase):
     if __debug__:
         __doc__ = schema
 
@@ -169,17 +177,23 @@ class StatisticsDatabase(Database):
         self._dispersy = dispersy
         super(StatisticsDatabase, self).__init__(path.join(dispersy.working_directory, u"sqlite", u"statistics.db"))
 
+    @inlineCallbacks
     def open(self):
         self._dispersy.database.attach_commit_callback(self.commit)
-        return super(StatisticsDatabase, self).open()
+        res = yield super(StatisticsDatabase, self).open()
+        returnValue(res)
 
+    @inlineCallbacks
     def close(self, commit=True):
         self._dispersy.database.detach_commit_callback(self.commit)
-        return super(StatisticsDatabase, self).close(commit)
+        res = yield super(StatisticsDatabase, self).close(commit)
+        returnValue(res)
 
+    @inlineCallbacks
     def cleanup(self):
-        self.executescript(cleanup)
+        yield self.executescript(cleanup)
 
+    @inlineCallbacks
     def check_database(self, database_version):
         assert isinstance(database_version, unicode)
         assert database_version.isdigit()
@@ -188,8 +202,8 @@ class StatisticsDatabase(Database):
 
         # setup new database with current database_version
         if database_version < 1:
-            self.executescript(schema)
-            self.commit()
+            yield self.executescript(schema)
+            yield self.commit()
 
         else:
             # upgrade to version 2
@@ -201,7 +215,7 @@ class StatisticsDatabase(Database):
                 # if __debug__: dprint("upgrade database ", database_version, " -> ", 2, " (done)")
                 pass
 
-        return LATEST_VERSION
+        returnValue(LATEST_VERSION)
 
 
 def enum(*sequential, **named):
