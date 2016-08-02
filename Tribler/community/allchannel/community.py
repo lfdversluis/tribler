@@ -434,7 +434,7 @@ class AllChannelCommunity(Community):
                 if community:
                     # at this point we should NOT have the channel message for this community
                     if __debug__:
-                        meta_message = yield self._dispersy.database.stormdb.fetchone(
+                        meta_message = yield self._dispersy.database.fetchone(
                             u"SELECT * FROM sync WHERE community = ? AND meta_message = ? AND undone = 0",
                             (community.database_id, community.get_meta_message(u"channel").database_id))
                         if meta_message is None:
@@ -593,7 +593,7 @@ class AllChannelCommunity(Community):
     @inlineCallbacks
     def _get_packet_from_dispersy_id(self, dispersy_id, messagename):
         try:
-            packet, = yield self._dispersy.database.stormdb.fetchone(
+            packet, = yield self._dispersy.database.fetchone(
                 u"SELECT sync.packet FROM community JOIN sync ON sync.community = community.id WHERE sync.id = ?", (dispersy_id,))
         except TypeError:
             raise RuntimeError("Unknown dispersy_id")
@@ -702,7 +702,7 @@ class ChannelCastDBStub():
     @inlineCallbacks
     def _cacheTorrents(self):
         sql = u"SELECT sync.packet, sync.id FROM sync JOIN meta_message ON sync.meta_message = meta_message.id JOIN community ON community.id = sync.community WHERE meta_message.name = 'torrent'"
-        results = yield self._dispersy.database.stormdb.fetchall(sql)
+        results = yield self._dispersy.database.fetchall(sql)
         messages = yield self.convert_to_messages(results)
 
         for _, message in messages:
@@ -726,7 +726,7 @@ class VoteCastDBStub():
 
         sql = u"SELECT sync.id FROM sync JOIN member ON sync.member = member.id JOIN community ON community.id = sync.community JOIN meta_message ON sync.meta_message = meta_message.id WHERE community.classification = 'AllChannelCommunity' AND meta_message.name = 'votecast' AND member.public_key = ? ORDER BY global_time DESC LIMIT 1"
         try:
-            id, = yield self._dispersy.database.stormdb.fetchone(sql, (buffer(public_key),))
+            id, = yield self._dispersy.database.fetchone(sql, (buffer(public_key),))
             self._votecache[public_key] = int(id)
             returnValue(self._votecache[public_key])
         except TypeError:

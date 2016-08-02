@@ -1171,7 +1171,7 @@ class ChannelCommunity(Community):
 
         # 1. get the packet
         try:
-            packet, packet_id = yield self._dispersy.database.stormdb.fetchone(
+            packet, packet_id = yield self._dispersy.database.fetchone(
                 u"SELECT packet, id FROM sync WHERE meta_message = ? ORDER BY global_time DESC LIMIT 1",
                                                                 (channel_meta.database_id,))
         except TypeError:
@@ -1331,7 +1331,7 @@ class ChannelCommunity(Community):
     def _get_packet_id(self, global_time, mid):
         if global_time and mid:
             try:
-                packet_id, = self._dispersy.database.stormdb.fetchone(u"""
+                packet_id, = self._dispersy.database.fetchone(u"""
                     SELECT sync.id
                     FROM sync
                     JOIN member ON (member.id = sync.member)

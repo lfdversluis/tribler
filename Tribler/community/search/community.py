@@ -701,7 +701,7 @@ class SearchCommunity(Community):
     def _get_packet_from_dispersy_id(self, dispersy_id, messagename):
         # 1. get the packet
         try:
-            packet, _ = yield self._dispersy.database.stormdb.fetchone(u"SELECT sync.packet, sync.id FROM community JOIN sync ON sync.community = community.id WHERE sync.id = ?", (dispersy_id,))
+            packet, _ = yield self._dispersy.database.fetchone(u"SELECT sync.packet, sync.id FROM community JOIN sync ON sync.community = community.id WHERE sync.id = ?", (dispersy_id,))
         except TypeError:
             raise RuntimeError(u"Unknown dispersy_id")
 
@@ -761,7 +761,7 @@ class ChannelCastDBStub(object):
     @inlineCallbacks
     def _cacheTorrents(self):
         sql = u"SELECT sync.packet, sync.id FROM sync JOIN meta_message ON sync.meta_message = meta_message.id JOIN community ON community.id = sync.community WHERE meta_message.name = 'torrent'"
-        results = yield self._dispersy.database.stormdb.fetchall(sql)
+        results = yield self._dispersy.database.fetchall(sql)
         messages = yield self.convert_to_messages(results)
 
         cached_torrents = yield self.get_cached_torrents()
