@@ -134,9 +134,10 @@ class BarterStatistics(object):
             return True
         return False
 
+    @inlineCallbacks
     def close(self):
         if self.db is not None and not self.db_closed:
-            self.db.close()
+            yield self.db.close()
             self.db = None
             self.db_closed = True
 

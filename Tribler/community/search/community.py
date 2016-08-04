@@ -15,12 +15,12 @@ from Tribler.community.search.conversion import SearchConversion
 from Tribler.community.search.payload import (SearchRequestPayload, SearchResponsePayload, TorrentRequestPayload,
                                               TorrentCollectRequestPayload, TorrentCollectResponsePayload,
                                               TasteIntroPayload)
+from Tribler.dispersy.StormDBManager import IgnoreCommits
 from Tribler.dispersy.authentication import MemberAuthentication
 from Tribler.dispersy.bloomfilter import BloomFilter
 from Tribler.dispersy.candidate import CANDIDATE_WALK_LIFETIME, WalkCandidate
 from Tribler.dispersy.community import Community
 from Tribler.dispersy.conversion import DefaultConversion
-from Tribler.dispersy.database import IgnoreCommits
 from Tribler.dispersy.destination import CandidateDestination, CommunityDestination
 from Tribler.dispersy.distribution import DirectDistribution, FullSyncDistribution
 from Tribler.dispersy.exception import CommunityNotFoundException

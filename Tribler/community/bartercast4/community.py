@@ -74,7 +74,6 @@ class BarterCommunity(Community):
         ]
 
     @inlineCallbacks
-    # TODO(Laurens): Check callers
     def initialize(self, integrate_with_tribler=False, auto_join_channel=False):
         yield self.init_database()
         yield super(BarterCommunity, self).initialize()

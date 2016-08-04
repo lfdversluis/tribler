@@ -1,3 +1,7 @@
+from twisted.internet import reactor
+from twisted.internet.defer import inlineCallbacks
+from twisted.internet.threads import blockingCallFromThread
+
 from Tribler.dispersy.message import Packet
 from Tribler.dispersy.payload import Payload
 from struct import pack
@@ -166,8 +170,11 @@ class ModerationPayload(Payload):
             self._timestamp = timestamp
             self._severity = severity
             self._causepacket = causepacket
+            self.initialize()
 
-            message = causepacket.load_message()
+        @inlineCallbacks
+        def initialize(self):
+            message = yield self._causepacket.load_message()
             self._mid = message.authentication.member.mid
             self._global_time = message.distribution.global_time
 

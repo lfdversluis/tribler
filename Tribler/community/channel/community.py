@@ -553,14 +553,14 @@ class ChannelCommunity(Community):
         reply_to_mid = None
         reply_to_global_time = None
         if reply_to_message:
-            message = reply_to_message.load_message()
+            message = yield reply_to_message.load_message()
             reply_to_mid = message.authentication.member.mid
             reply_to_global_time = message.distribution.global_time
 
         reply_after_mid = None
         reply_after_global_time = None
         if reply_after_message:
-            message = reply_after_message.load_message()
+            message = yield reply_after_message.load_message()
             reply_after_mid = message.authentication.member.mid
             reply_after_global_time = message.distribution.global_time
 
@@ -646,7 +646,7 @@ class ChannelCommunity(Community):
             for _, _, packet in descriptors:
                 dispersy_id = packet.packet_id
 
-                message = packet.load_message()
+                message = yield packet.load_message()
                 infohash = message.payload.infohash
                 self._channelcast_db.on_remove_comment_from_dispersy(self._channel_id, dispersy_id, infohash, redo)
 
@@ -720,7 +720,7 @@ class ChannelCommunity(Community):
         latest_modification_mid = None
         latest_modification_global_time = None
         if latest_modification:
-            message = latest_modification.load_message()
+            message = yield latest_modification.load_message()
             latest_modification_mid = message.authentication.member.mid
             latest_modification_global_time = message.distribution.global_time
 
@@ -876,7 +876,7 @@ class ChannelCommunity(Community):
             for _, _, packet in descriptors:
                 dispersy_id = packet.packet_id
 
-                message = packet.load_message()
+                message = yield packet.load_message()
                 message_name = message.name
                 modifying_dispersy_id = message.payload.modification_on.packet_id
                 modification_type = unicode(message.payload.modification_type)
@@ -980,7 +980,7 @@ class ChannelCommunity(Community):
     def _disp_undo_playlist_torrent(self, descriptors, redo=False):
         if self.integrate_with_tribler:
             for _, _, packet in descriptors:
-                message = packet.load_message()
+                message = yield packet.load_message()
                 infohash = message.payload.infohash
                 playlist_dispersy_id = message.payload.playlist.packet_id
 
@@ -1031,7 +1031,7 @@ class ChannelCommunity(Community):
 
                 # if cause packet is present, it is enforced by conversion
                 cause = message.payload.causepacket.packet_id
-                cause_message = message.payload.causepacket.load_message()
+                cause_message = yield message.payload.causepacket.load_message()
                 authentication_member = cause_message.authentication.member
                 if authentication_member == self._my_member:
                     by_peer_id = None

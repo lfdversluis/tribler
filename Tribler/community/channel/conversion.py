@@ -1,6 +1,7 @@
 import zlib
 from random import sample
 from struct import pack, unpack_from
+from twisted.internet.defer import returnValue, inlineCallbacks
 
 from Tribler.Core.Utilities.encoding import encode, decode
 from Tribler.dispersy.conversion import BinaryConversion
@@ -140,6 +141,7 @@ class ChannelConversion(BinaryConversion):
 
         return offset, placeholder.meta.payload.implement(infohash, timestamp, name, files, trackers)
 
+    @inlineCallbacks
     def _encode_comment(self, message):
         dict = {"text": message.payload.text,
                 "timestamp": message.payload.timestamp}
@@ -156,13 +158,13 @@ class ChannelConversion(BinaryConversion):
             dict["reply-after-global-time"] = message.payload.reply_after_global_time
 
         if playlist_packet:
-            message = playlist_packet.load_message()
+            message = yield playlist_packet.load_message()
             dict["playlist-mid"] = message.authentication.member.mid
             dict["playlist-global-time"] = message.distribution.global_time
 
         if infohash:
             dict['infohash'] = infohash
-        return encode(dict),
+        returnValue((encode(dict),))
 
     def _decode_comment(self, placeholder, offset, data):
         try:
@@ -309,8 +311,9 @@ class ChannelConversion(BinaryConversion):
 
         return offset, placeholder.meta.payload.implement(infohash, type, timestamp)
 
+    @inlineCallbacks
     def _encode_modification(self, message):
-        modification_on = message.payload.modification_on.load_message()
+        modification_on = yield message.payload.modification_on.load_message()
         dict = {"modification-type": message.payload.modification_type,
                 "modification-value": message.payload.modification_value,
                 "timestamp": message.payload.timestamp,
@@ -319,11 +322,11 @@ class ChannelConversion(BinaryConversion):
 
         prev_modification = message.payload.prev_modification_packet
         if prev_modification:
-            message = prev_modification.load_message()
+            message = yield prev_modification.load_message()
             dict["prev-modification-mid"] = message.authentication.member.mid
             dict["prev-modification-global-time"] = message.distribution.global_time
 
-        return encode(dict),
+        returnValue((encode(dict),))
 
     def _decode_modification(self, placeholder, offset, data):
         try:
@@ -386,9 +389,10 @@ class ChannelConversion(BinaryConversion):
 
         return offset, placeholder.meta.payload.implement(modification_type, modification_value, timestamp, modification_on, prev_modification_packet, prev_modification_mid, prev_modification_global_time)
 
+    @inlineCallbacks
     def _encode_playlist_torrent(self, message):
-        playlist = message.payload.playlist.load_message()
-        return pack('!20s20sQ', message.payload.infohash, playlist.authentication.member.mid, playlist.distribution.global_time),
+        playlist = yield message.payload.playlist.load_message()
+        returnValue((pack('!20s20sQ', message.payload.infohash, playlist.authentication.member.mid, playlist.distribution.global_time),))
 
     def _decode_playlist_torrent(self, placeholder, offset, data):
         if len(data) < offset + 48:

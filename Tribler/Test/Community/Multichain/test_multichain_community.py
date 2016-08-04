@@ -277,9 +277,9 @@ class TestMultiChainCommunity(AbstractServer, DispersyTestFunc):
         _, signature_response = iterator.next()
         yield node.give_message(signature_response, node)
         # Assert
-        self.assertBlocksInDatabase(other, 1)
-        self.assertBlocksInDatabase(node, 1)
-        self.assertBlocksAreEqual(node, other)
+        yield self.assertBlocksInDatabase(other, 1)
+        yield self.assertBlocksInDatabase(node, 1)
+        yield self.assertBlocksAreEqual(node, other)
 
         block = yield node.call(node.community.persistence.get_latest_block, node.community._public_key)
         self.assertNotEquals(block.hash_responder, EMPTY_HASH)
@@ -364,9 +364,9 @@ class TestMultiChainCommunity(AbstractServer, DispersyTestFunc):
         _, block_response = iterator.next()
         yield crawler.give_message(block_response, other)
         # Assert
-        self.assertBlocksInDatabase(node, 1)
-        self.assertBlocksInDatabase(crawler, 1)
-        self.assertBlocksAreEqual(node, crawler)
+        yield self.assertBlocksInDatabase(node, 1)
+        yield self.assertBlocksInDatabase(crawler, 1)
+        yield self.assertBlocksAreEqual(node, crawler)
 
     @deferred(timeout=10)
     @inlineCallbacks
@@ -394,8 +394,8 @@ class TestMultiChainCommunity(AbstractServer, DispersyTestFunc):
         _, block_response = iterator.next()
         yield crawler.give_message(block_response, node)
         # Assert
-        self.assertBlocksInDatabase(node, 1)
-        self.assertBlocksInDatabase(crawler, 1)
+        yield self.assertBlocksInDatabase(node, 1)
+        yield self.assertBlocksInDatabase(crawler, 1)
 
     @deferred(timeout=10)
     @inlineCallbacks
@@ -464,9 +464,9 @@ class TestMultiChainCommunity(AbstractServer, DispersyTestFunc):
         _, block_response = iterator.next()
         yield crawler.give_message(block_response, other)
         # Assert
-        self.assertBlocksInDatabase(node, 1)
-        self.assertBlocksInDatabase(crawler, 1)
-        self.assertBlocksAreEqual(node, crawler)
+        yield self.assertBlocksInDatabase(node, 1)
+        yield self.assertBlocksInDatabase(crawler, 1)
+        yield self.assertBlocksAreEqual(node, crawler)
 
     @deferred(timeout=10)
     @inlineCallbacks
@@ -530,9 +530,9 @@ class TestMultiChainCommunity(AbstractServer, DispersyTestFunc):
         _, block_response = iterator.next()
         yield crawler.give_message(block_response, node)
         # Assert
-        self.assertBlocksInDatabase(node, 1)
-        self.assertBlocksInDatabase(crawler, 1)
-        self.assertBlocksAreEqual(node, crawler)
+        yield self.assertBlocksInDatabase(node, 1)
+        yield self.assertBlocksInDatabase(crawler, 1)
+        yield self.assertBlocksAreEqual(node, crawler)
 
     @deferred(timeout=10)
     @inlineCallbacks
@@ -585,9 +585,9 @@ class TestMultiChainCommunity(AbstractServer, DispersyTestFunc):
         yield crawler.give_message(block_response, node)
 
         # Assert
-        self.assertBlocksInDatabase(node, 2)
-        self.assertBlocksInDatabase(crawler, 2)
-        self.assertBlocksAreEqual(node, crawler)
+        yield self.assertBlocksInDatabase(node, 2)
+        yield self.assertBlocksInDatabase(crawler, 2)
+        yield self.assertBlocksAreEqual(node, crawler)
 
     @deferred(timeout=10)
     @inlineCallbacks
@@ -632,7 +632,7 @@ class TestMultiChainCommunity(AbstractServer, DispersyTestFunc):
         Test the get_statistics method where last block is none
         """
         node, = yield self.create_nodes(1)
-        statistics = node.community.get_statistics()
+        statistics = yield node.community.get_statistics()
         assert isinstance(statistics, dict), type(statistics)
         assert len(statistics) > 0
 
@@ -649,21 +649,31 @@ class TestMultiChainCommunity(AbstractServer, DispersyTestFunc):
         # Create a (halfsigned) block
         yield node.call(node.community.publish_signature_request_message, target_other, 10, 5)
         # Get statistics
-        statistics = node.community.get_statistics()
+        statistics = yield node.community.get_statistics()
         assert isinstance(statistics, dict), type(statistics)
         assert len(statistics) > 0
 
     @blocking_call_on_reactor_thread
+    @inlineCallbacks
     def assertBlocksInDatabase(self, node, amount):
-        assert len(node.community.persistence.get_all_hash_requester()) == amount
+        all_hash_requesters = yield node.community.persistence.get_all_hash_requester()
+        assert len(all_hash_requesters) == amount
 
     @blocking_call_on_reactor_thread
+    @inlineCallbacks
     def assertBlocksAreEqual(self, node, other):
-        ids_node = node.community.persistence.get_all_hash_requester()
-        ids_other = other.community.persistence.get_all_hash_requester()
+        ids_node = yield node.community.persistence.get_all_hash_requester()
+        ids_other = yield other.community.persistence.get_all_hash_requester()
         assert len(ids_node) == len(ids_other)
-        blocks_node = map(node.community.persistence.get_by_hash_requester, ids_node)
-        blocks_other = map(other.community.persistence.get_by_hash_requester, ids_other)
+        blocks_node = []
+        blocks_other = []
+        for id in ids_node:
+            this_node_block = yield node.community.persistence.get_by_hash_requester(id)
+            blocks_node.append(this_node_block)
+
+        for id in ids_other:
+            other_node_block = yield node.community.persistence.get_by_hash_requester(id)
+            blocks_other.append(other_node_block)
 
         for block_node, block_other in zip(blocks_node, blocks_other):
             assert block_node.hash_requester == block_other.hash_requester

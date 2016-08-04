@@ -3,6 +3,10 @@ import logging
 import os
 import shutil
 import threading
+from twisted.internet.defer import inlineCallbacks
+
+from nose.twistedtools import deferred
+
 from Tribler.Core.Utilities.network_utils import get_random_port
 from Tribler.Core.simpledefs import dlstatus_strings, DLSTATUS_DOWNLOADING
 from Tribler.Test.common import UBUNTU_1504_INFOHASH, TORRENT_FILE
@@ -19,11 +23,18 @@ class TestDownload(TestAsServer):
         super(TestDownload, self).__init__(*argv, **kwargs)
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    @deferred(timeout=10)
+    @inlineCallbacks
     def setUp(self):
         """ override TestAsServer """
-        super(TestDownload, self).setUp()
+        yield super(TestDownload, self).setUp()
 
         self.downloading_event = threading.Event()
+
+    @deferred(timeout=10)
+    @inlineCallbacks
+    def tearDown(self):
+        yield super(TestDownload, self).tearDown()
 
     def setUpPreSession(self):
         """ override TestAsServer """

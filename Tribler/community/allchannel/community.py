@@ -6,6 +6,7 @@ from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.task import LoopingCall
 from twisted.python.threadable import isInIOThread
 
+from Tribler.dispersy.StormDBManager import IgnoreCommits
 from .conversion import AllChannelConversion
 from Tribler.community.allchannel.message import DelayMessageReqChannelMessage
 from Tribler.community.allchannel.payload import (ChannelCastRequestPayload, ChannelCastPayload, VoteCastPayload,
@@ -15,7 +16,6 @@ from Tribler.community.channel.preview import PreviewChannelCommunity
 from Tribler.dispersy.authentication import MemberAuthentication
 from Tribler.dispersy.community import Community
 from Tribler.dispersy.conversion import DefaultConversion
-from Tribler.dispersy.database import IgnoreCommits
 from Tribler.dispersy.destination import CandidateDestination, CommunityDestination
 from Tribler.dispersy.distribution import FullSyncDistribution, DirectDistribution
 from Tribler.dispersy.exception import CommunityNotFoundException
@@ -486,13 +486,14 @@ class AllChannelCommunity(Community):
 
             self._votecast_db.on_votes_from_dispersy(votelist)
 
+    @inlineCallbacks
     def undo_votecast(self, descriptors, redo=False):
         if self.tribler_session is not None:
             contains_my_vote = False
             votelist = []
             now = long(time())
             for _, _, packet in descriptors:
-                message = packet.load_message()
+                message = yield packet.load_message()
                 dispersy_id = message.packet_id
 
                 channel_id = self._get_channel_id(message.payload.cid)

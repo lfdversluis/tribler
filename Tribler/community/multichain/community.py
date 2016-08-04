@@ -49,11 +49,18 @@ class MultiChainCommunity(Community):
 
         self._private_key = self.my_member.private_key
         self._public_key = self.my_member.public_key
-        self.persistence = MultiChainDB(self.dispersy, self.dispersy.working_directory)
+        self.persistence = None
         self.logger.debug("The multichain community started with Public Key: %s", base64.encodestring(self._public_key))
 
         # No response is expected yet.
         self.expected_response = None
+
+
+    @inlineCallbacks
+    def initialize(self):
+        yield super(MultiChainCommunity, self).initialize()
+        self.persistence = MultiChainDB(self.dispersy, self.dispersy.working_directory)
+        yield self.persistence.initialize()
 
     @classmethod
     @inlineCallbacks
@@ -156,7 +163,7 @@ class MultiChainCommunity(Community):
         """
         message = yield self.create_signature_request_message(candidate, up, down)
         self.create_signature_request(candidate, message, self.allow_signature_response)
-        self.persist_signature_request(message)
+        yield self.persist_signature_request(message)
         returnValue(True)
 
     @inlineCallbacks
@@ -169,10 +176,10 @@ class MultiChainCommunity(Community):
         :return: Signature_request message ready for distribution.
         """
         # Instantiate the data
-        total_up_requester, total_down_requester = self._get_next_total(up, down)
+        total_up_requester, total_down_requester = yield self._get_next_total(up, down)
         # Instantiate the personal information
-        sequence_number_requester = self._get_next_sequence_number()
-        previous_hash_requester = self._get_latest_hash()
+        sequence_number_requester = yield self._get_next_sequence_number()
+        previous_hash_requester = yield self._get_latest_hash()
 
         payload = (up, down, total_up_requester, total_down_requester,
                    sequence_number_requester, previous_hash_requester)
@@ -199,9 +206,9 @@ class MultiChainCommunity(Community):
         payload = message.payload
 
         # The up and down values are reversed for the responder.
-        total_up_responder, total_down_responder = self._get_next_total(payload.down, payload.up)
-        sequence_number_responder = self._get_next_sequence_number()
-        previous_hash_responder = self._get_latest_hash()
+        total_up_responder, total_down_responder = yield self._get_next_total(payload.down, payload.up)
+        sequence_number_responder = yield self._get_next_sequence_number()
+        previous_hash_responder = yield self._get_latest_hash()
 
         payload = (payload.up, payload.down, payload.total_up_requester, payload.total_down_requester,
                    payload.sequence_number_requester, payload.previous_hash_requester,
@@ -213,7 +220,7 @@ class MultiChainCommunity(Community):
         message = yield meta.impl(authentication=(message.authentication.members, message.authentication.signatures),
                             distribution=(message.distribution.global_time,),
                             payload=payload)
-        self.persist_signature_response(message)
+        yield self.persist_signature_response(message)
         self.logger.info("Sending signature response.")
         returnValue(message)
 
@@ -236,6 +243,7 @@ class MultiChainCommunity(Community):
             return (request.payload.sequence_number_requester == response.payload.sequence_number_requester and
                     request.payload.previous_hash_requester == response.payload.previous_hash_requester and modified)
 
+    @inlineCallbacks
     def received_signature_response(self, messages):
         """
         We've received a valid signature response and must process this message.
@@ -244,8 +252,9 @@ class MultiChainCommunity(Community):
 
         self.logger.info("Valid %s signature response(s) received.", len(messages))
         for message in messages:
-            self.update_signature_response(message)
+            yield self.update_signature_response(message)
 
+    @inlineCallbacks
     def persist_signature_response(self, message):
         """
         Persist the signature response message, when this node has not yet persisted the corresponding request block.
@@ -254,8 +263,9 @@ class MultiChainCommunity(Community):
         """
         block = DatabaseBlock.from_signature_response_message(message)
         self.logger.info("Persisting sr: %s", base64.encodestring(block.hash_requester).strip())
-        self.persistence.add_block(block)
+        yield self.persistence.add_block(block)
 
+    @inlineCallbacks
     def update_signature_response(self, message):
         """
         Update the signature response message, when this node has already persisted the corresponding request block.
@@ -264,8 +274,9 @@ class MultiChainCommunity(Community):
         """
         block = DatabaseBlock.from_signature_response_message(message)
         self.logger.info("Persisting sr: %s", base64.encodestring(block.hash_requester).strip())
-        self.persistence.update_block_with_responder(block)
+        yield self.persistence.update_block_with_responder(block)
 
+    @inlineCallbacks
     def persist_signature_request(self, message):
         """
         Persist the signature request message as a block.
@@ -274,12 +285,12 @@ class MultiChainCommunity(Community):
         """
         block = DatabaseBlock.from_signature_request_message(message)
         self.logger.info("Persisting sr: %s", base64.encodestring(block.hash_requester).strip())
-        self.persistence.add_block(block)
+        yield self.persistence.add_block(block)
 
     @inlineCallbacks
     def send_crawl_request(self, candidate, sequence_number=None):
         if sequence_number is None:
-            sequence_number = self.persistence.get_latest_sequence_number(candidate.get_member().public_key)
+            sequence_number = yield self.persistence.get_latest_sequence_number(candidate.get_member().public_key)
         self.logger.info("Crawler: Requesting crawl from node %s, from sequence number %d",
                          base64.encodestring(candidate.get_member().mid).strip(), sequence_number)
         meta = self.get_meta_message(CRAWL_REQUEST)
@@ -300,7 +311,7 @@ class MultiChainCommunity(Community):
 
     @inlineCallbacks
     def crawl_requested(self, candidate, sequence_number):
-        blocks = self.persistence.get_blocks_since(self._public_key, sequence_number)
+        blocks = yield self.persistence.get_blocks_since(self._public_key, sequence_number)
         if len(blocks) > 0:
             self.logger.debug("Crawler: Sending %d blocks", len(blocks))
             messages = []
@@ -338,12 +349,13 @@ class MultiChainCommunity(Community):
             responder = yield self.dispersy.get_member(public_key=message.payload.public_key_responder)
             block = DatabaseBlock.from_block_response_message(message, requester, responder)
             # Create the hash of the message
-            if not self.persistence.contains(block.hash_requester):
+            contains = yield self.persistence.contains(block.hash_requester)
+            if not contains:
                 self.logger.info("Crawler: Persisting sr: %s from ip (%s:%d)",
                                  base64.encodestring(block.hash_requester).strip(),
                                  message.candidate.sock_addr[0],
                                  message.candidate.sock_addr[1])
-                self.persistence.add_block(block)
+                yield self.persistence.add_block(block)
             else:
                 self.logger.debug("Crawler: Received already known block")
 
@@ -354,6 +366,7 @@ class MultiChainCommunity(Community):
             yield self.send_crawl_request(message.candidate)
 
     @blocking_call_on_reactor_thread
+    @inlineCallbacks
     def get_statistics(self):
         """
         Returns a dictionary with some statistics regarding the local multichain database
@@ -361,10 +374,10 @@ class MultiChainCommunity(Community):
         """
         statistics = dict()
         statistics["self_id"] = base64.encodestring(self._public_key)
-        statistics["self_total_blocks"] = self.persistence.get_latest_sequence_number(self._public_key)
+        statistics["self_total_blocks"] = yield self.persistence.get_latest_sequence_number(self._public_key)
         (statistics["self_total_up_mb"],
-         statistics["self_total_down_mb"]) = self.persistence.get_total(self._public_key)
-        latest_block = self.persistence.get_latest_block(self._public_key)
+         statistics["self_total_down_mb"]) = yield self.persistence.get_total(self._public_key)
+        latest_block = yield self.persistence.get_latest_block(self._public_key)
         if latest_block:
             statistics["latest_block_insert_time"] = str(latest_block.insert_time)
             statistics["latest_block_id"] = base64.encodestring(latest_block.hash_requester)
@@ -379,8 +392,9 @@ class MultiChainCommunity(Community):
             statistics["latest_block_responder_id"] = ""
             statistics["latest_block_up_mb"] = ""
             statistics["latest_block_down_mb"] = ""
-        return statistics
+        returnValue(statistics)
 
+    @inlineCallbacks
     def _get_next_total(self, up, down):
         """
         Returns the next total numbers of up and down incremented with the current interaction up and down metric.
@@ -388,25 +402,29 @@ class MultiChainCommunity(Community):
         :param down: Down metric for the interaction.
         :return: (total_up (int), total_down (int)
         """
-        total_up, total_down = self.persistence.get_total(self._public_key)
+        total_up, total_down = yield self.persistence.get_total(self._public_key)
         if total_up == total_down == -1:
-            return up, down
+            returnValue((up, down))
         else:
-            return total_up + up, total_down + down
+            returnValue((total_up + up, total_down + down))
 
+    @inlineCallbacks
     def _get_next_sequence_number(self):
-        return self.persistence.get_latest_sequence_number(self._public_key) + 1
+        res = yield self.persistence.get_latest_sequence_number(self._public_key)
+        returnValue(res + 1)
 
+    @inlineCallbacks
     def _get_latest_hash(self):
-        previous_hash = self.persistence.get_latest_hash(self._public_key)
-        return previous_hash if previous_hash else GENESIS_ID
+        previous_hash = yield self.persistence.get_latest_hash(self._public_key)
+        returnValue(previous_hash if previous_hash else GENESIS_ID)
 
+    @inlineCallbacks
     def unload_community(self):
         self.logger.debug("Unloading the MultiChain Community.")
         self.notifier.remove_observer(self.on_tunnel_remove)
         super(MultiChainCommunity, self).unload_community()
         # Close the persistence layer
-        self.persistence.close()
+        yield self.persistence.close()
 
     @forceDBThread # This is just a call on reactor thread, so safe in combination with inlinecallbacks
     @inlineCallbacks

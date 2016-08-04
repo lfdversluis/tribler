@@ -2,9 +2,11 @@
 """
 from os import path
 from hashlib import sha256
-from Tribler.dispersy.database import Database
+from twisted.internet.defer import inlineCallbacks, returnValue
+
 from Tribler.community.multichain.conversion import (encode_block, encode_block_requester_half, encode_block_crawl,
                                                      EMPTY_HASH)
+from Tribler.dispersy.dispersydatabase import DispersyDatabase
 
 DATABASE_DIRECTORY = path.join(u"sqlite")
 # Path to the database location + dispersy._workingdirectory
@@ -46,7 +48,7 @@ DROP TABLE IF EXISTS option;
 """
 
 
-class MultiChainDB(Database):
+class MultiChainDB(DispersyDatabase):
     """
     Persistence layer for the MultiChain Community.
     Connection layer to SQLiteDB.
@@ -63,8 +65,12 @@ class MultiChainDB(Database):
         """
         super(MultiChainDB, self).__init__(path.join(working_directory, DATABASE_PATH))
         self._dispersy = dispersy
-        self.open()
 
+    @inlineCallbacks
+    def initialize(self):
+        yield self.open()
+
+    @inlineCallbacks
     def add_block(self, block):
         """
         Persist a block
@@ -78,7 +84,7 @@ class MultiChainDB(Database):
                 block.sequence_number_responder, buffer(block.previous_hash_responder),
                 buffer(block.signature_responder), buffer(block.hash_responder))
 
-        self.execute(
+        yield self.execute(
             u"INSERT INTO multi_chain (public_key_requester, public_key_responder, up, down, "
             u"total_up_requester, total_down_requester, sequence_number_requester, previous_hash_requester, "
             u"signature_requester, hash_requester, "
@@ -86,8 +92,9 @@ class MultiChainDB(Database):
             u"signature_responder, hash_responder) "
             u"VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             data)
-        self.commit()
+        yield self.commit()
 
+    @inlineCallbacks
     def update_block_with_responder(self, block):
         """
         Update an existing block
@@ -98,15 +105,16 @@ class MultiChainDB(Database):
             block.sequence_number_responder, buffer(block.previous_hash_responder),
             buffer(block.signature_responder), buffer(block.hash_responder), buffer(block.hash_requester))
 
-        self.execute(
+        yield self.execute(
             u"UPDATE multi_chain "
             u"SET total_up_responder = ?, total_down_responder = ?, "
             u"sequence_number_responder = ?, previous_hash_responder = ?, "
             u"signature_responder = ?, hash_responder = ? "
             u"WHERE hash_requester = ?",
             data)
-        self.commit()
+        yield self.commit()
 
+    @inlineCallbacks
     def get_latest_hash(self, public_key):
         """
         Get the relevant hash of the latest block in the chain for a specific public key.
@@ -122,12 +130,16 @@ class MultiChainDB(Database):
                    u"UNION " \
                    u"SELECT hash_responder AS block_hash, sequence_number_responder AS sequence_number " \
                    u"FROM multi_chain WHERE public_key_responder = ?) ORDER BY sequence_number DESC LIMIT 1"
-        db_result = self.execute(db_query, (public_key, public_key)).fetchone()
-        return str(db_result[0]) if db_result else None
+        db_result = yield self.fetchone(db_query, (public_key, public_key))
+        returnValue(str(db_result[0]) if db_result else None)
 
+    @inlineCallbacks
     def get_latest_block(self, public_key):
-        return self.get_by_hash(self.get_latest_hash(public_key))
+        latest_hash = yield self.get_latest_hash(public_key)
+        hash = yield self.get_by_hash(latest_hash)
+        returnValue(hash)
 
+    @inlineCallbacks
     def get_by_hash_requester(self, hash_requester):
         """
         Returns a block saved in the persistence
@@ -140,10 +152,11 @@ class MultiChainDB(Database):
                    u"total_up_responder, total_down_responder, sequence_number_responder, previous_hash_responder, " \
                    u"signature_responder, hash_responder, insert_time " \
                    u"FROM `multi_chain` WHERE hash_requester = ? LIMIT 1"
-        db_result = self.execute(db_query, (buffer(hash_requester),)).fetchone()
+        db_result = yield self.execute(db_query, (buffer(hash_requester),))
         # Create a DB Block or return None
-        return self._create_database_block(db_result)
+        returnValue(self._create_database_block(db_result))
 
+    @inlineCallbacks
     def get_by_hash(self, hash):
         """
         Returns a block saved in the persistence, based on a hash that can be either hash_requester or hash_responder
@@ -151,7 +164,7 @@ class MultiChainDB(Database):
         :return: The block that was requested or None
         """
         if hash is None:
-            return None
+            returnValue(None)
 
         db_query = u"SELECT public_key_requester, public_key_responder, up, down, " \
                    u"total_up_requester, total_down_requester, sequence_number_requester, previous_hash_requester, " \
@@ -159,10 +172,11 @@ class MultiChainDB(Database):
                    u"total_up_responder, total_down_responder, sequence_number_responder, previous_hash_responder, " \
                    u"signature_responder, hash_responder, insert_time " \
                    u"FROM `multi_chain` WHERE hash_requester = ? OR hash_responder = ? LIMIT 1"
-        db_result = self.execute(db_query, (buffer(hash), buffer(hash))).fetchone()
+        db_result = yield self.fetchone(db_query, (buffer(hash), buffer(hash)))
         # Create a DB Block or return None
-        return self._create_database_block(db_result)
+        returnValue(self._create_database_block(db_result))
 
+    @inlineCallbacks
     def get_by_public_key_and_sequence_number(self, public_key, sequence_number):
         """
         Returns a block saved in the persistence.
@@ -181,10 +195,11 @@ class MultiChainDB(Database):
                    u"SELECT *, sequence_number_responder AS sequence_number," \
                    u"public_key_responder AS pk FROM `multi_chain`) " \
                    u"WHERE sequence_number = ? AND pk = ? LIMIT 1"
-        db_result = self.execute(db_query, (sequence_number, buffer(public_key))).fetchone()
+        db_result = yield self.fetchone(db_query, (sequence_number, buffer(public_key)))
         # Create a DB Block or return None
-        return self._create_database_block(db_result)
+        returnValue(self._create_database_block(db_result))
 
+    @inlineCallbacks
     def get_blocks_since(self, public_key, sequence_number):
         """
         Returns database blocks with sequence number higher than or equal to sequence_number, at most 100 results
@@ -206,8 +221,8 @@ class MultiChainDB(Database):
                    u"WHERE sequence_number >= ? AND public_key = ? " \
                    u"ORDER BY sequence_number ASC " \
                    u"LIMIT 100"
-        db_result = self.execute(db_query, (sequence_number, buffer(public_key))).fetchall()
-        return [self._create_database_block(db_item) for db_item in db_result]
+        db_result = yield self.fetchall(db_query, (sequence_number, buffer(public_key)))
+        returnValue([self._create_database_block(db_item) for db_item in db_result])
 
     def _create_database_block(self, db_result):
         """
@@ -220,15 +235,17 @@ class MultiChainDB(Database):
         else:
             return None
 
+    @inlineCallbacks
     def get_all_hash_requester(self):
         """
         Get all the hash_requester saved in the persistence layer.
         :return: list of hash_requester.
         """
-        db_result = self.execute(u"SELECT hash_requester FROM multi_chain").fetchall()
+        db_result = yield self.fetchall(u"SELECT hash_requester FROM multi_chain")
         # Unpack the db_result tuples and decode the results.
-        return [str(x[0]) for x in db_result]
+        returnValue([str(x[0]) for x in db_result])
 
+    @inlineCallbacks
     def contains(self, hash_requester):
         """
         Check if a block is existent in the persistence layer.
@@ -236,9 +253,10 @@ class MultiChainDB(Database):
         :return: True if the block exists, else false.
         """
         db_query = u"SELECT hash_requester FROM multi_chain WHERE hash_requester = ? LIMIT 1"
-        db_result = self.execute(db_query, (buffer(hash_requester),)).fetchone()
-        return db_result is not None
+        db_result = yield self.fetchone(db_query, (buffer(hash_requester),))
+        returnValue(db_result is not None)
 
+    @inlineCallbacks
     def get_latest_sequence_number(self, public_key):
         """
         Return the latest sequence number known for this public_key.
@@ -252,9 +270,11 @@ class MultiChainDB(Database):
                    u"FROM multi_chain WHERE public_key_requester = ? UNION " \
                    u"SELECT sequence_number_responder AS sequence_number " \
                    u"FROM multi_chain WHERE public_key_responder = ? )"
-        db_result = self.execute(db_query, (public_key, public_key)).fetchone()[0]
-        return db_result if db_result is not None else -1
+        db_result = yield self.fetchone(db_query, (public_key, public_key))
+        db_result = db_result[0]
+        returnValue(db_result if db_result is not None else -1)
 
+    @inlineCallbacks
     def get_total(self, public_key):
         """
         Return the latest (total_up, total_down) known for this node.
@@ -270,9 +290,9 @@ class MultiChainDB(Database):
                    u"SELECT total_up_responder AS total_up, total_down_responder AS total_down, " \
                    u"sequence_number_responder AS sequence_number FROM multi_chain WHERE public_key_responder = ? ) " \
                    u"ORDER BY sequence_number DESC LIMIT 1"
-        db_result = self.execute(db_query, (public_key, public_key)).fetchone()
-        return (db_result[0], db_result[1]) if db_result is not None and db_result[0] is not None \
-                                               and db_result[1] is not None else (-1, -1)
+        db_result = self.fetchone(db_query, (public_key, public_key))
+        returnValue((db_result[0], db_result[1]) if db_result is not None and db_result[0] is not None \
+                                               and db_result[1] is not None else (-1, -1))
 
     def open(self, initial_statements=True, prepare_visioning=True):
         return super(MultiChainDB, self).open(initial_statements, prepare_visioning)
@@ -280,6 +300,7 @@ class MultiChainDB(Database):
     def close(self, commit=True):
         return super(MultiChainDB, self).close(commit)
 
+    @inlineCallbacks
     def check_database(self, database_version):
         """
         Ensure the proper schema is used by the database.
@@ -294,11 +315,11 @@ class MultiChainDB(Database):
         if database_version < LATEST_DB_VERSION:
             # Remove all previous data, since we have only been testing so far, and previous blocks might not be
             # reliable. In the future, we should implement an actual upgrade procedure
-            self.executescript(upgrade_to_version_2_script)
-            self.executescript(schema)
-            self.commit()
+            yield self.executescript(upgrade_to_version_2_script)
+            yield self.executescript(schema)
+            yield self.commit()
 
-        return LATEST_DB_VERSION
+        returnValue(LATEST_DB_VERSION)
 
 
 class DatabaseBlock:
