@@ -8,8 +8,9 @@ import socket
 from binascii import hexlify
 import time
 
-from twisted.internet import threads
+from twisted.internet import threads, reactor
 from twisted.internet.defer import inlineCallbacks, returnValue
+from twisted.internet.task import LoopingCall
 
 from Tribler.Core.Utilities import torrent_utils
 from Tribler.Core import NoDispersyRLock
@@ -471,9 +472,18 @@ class Session(SessionConfigInterface):
             self.load_checkpoint()
 
         self.sessconfig.set_callback(self.lm.sessconfig_changed_callback)
+        self.ldc = LoopingCall(self.loop_delayed_calls)
+        self.ldc.start(0.1, True)
 
         startup_deferred = yield startup_deferred
         returnValue(startup_deferred)
+
+    def loop_delayed_calls(self):
+        cur_time = time.time()
+        for i in reactor.getDelayedCalls():
+            if i.getTime() - cur_time < 0:
+                with open("delayed_calls_async_tribler.txt", "a") as file:
+                    file.write("%s %s\n" % (cur_time, i.getTime() - cur_time))
 
     def shutdown(self, checkpoint=True, gracetime=2.0, hacksessconfcheckpoint=True):
         """ Checkpoints the session and closes it, stopping the download engine.
