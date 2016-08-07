@@ -51,7 +51,7 @@ def threaded_reactor():
         from threading import Thread
 
         def _reactor_runner():
-            reactor.suggestThreadPoolSize(1)
+            reactor.suggestThreadPoolSize(5)
             reactor.run(installSignalHandlers=False)
 
         _twisted_thread = Thread(target=_reactor_runner, name="Twisted")

@@ -349,6 +349,7 @@ class ChannelCommunity(Community):
                 self._channel_id = self._master_member.mid
                 authentication_member = message.authentication.member
 
+                self._logger.error("SETTING CHANNEL ID %s", self._channel_id)
                 self._channelcast_db.setChannelId(self._channel_id, authentication_member == self._my_member)
 
     @inlineCallbacks
@@ -387,6 +388,7 @@ class ChannelCommunity(Community):
 
             messages.append(message)
 
+        self._logger.error("Sending %s torrents in my channel", len(messages))
         yield self._dispersy.store_update_forward(messages, store, update, forward)
         returnValue(messages)
 
@@ -439,7 +441,7 @@ class ChannelCommunity(Community):
         else:
             for message in messages:
                 yield self._channelcast_db.newTorrent(message)
-                self._logger.debug("torrent received: %s on channel: %s", message.payload.infohash, self._master_member)
+                self._logger.error("TORRENT RECEIVED: %s on channel: %s", message.payload.infohash, self._master_member)
                 if message.candidate and message.candidate.sock_addr:
                     _barter_statistics.dict_inc_bartercast(BartercastStatisticTypes.TORRENTS_RECEIVED,
                                                            "%s:%s" % (message.candidate.sock_addr[0], message.candidate.sock_addr[1]))
