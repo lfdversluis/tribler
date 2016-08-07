@@ -301,6 +301,8 @@ class ChannelCommunity(Community):
         message = yield meta.impl(authentication=(self._my_member,),
                             distribution=(claimed_global_time,),
                             payload=(name, description))
+
+        self._logger.error("SENDING CHANNEL MESSAGE AFTER CREATION %s", message)
         yield self._dispersy.store_update_forward([message], store, update, forward)
         returnValue(message)
 
