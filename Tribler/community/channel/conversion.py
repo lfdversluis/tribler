@@ -166,6 +166,7 @@ class ChannelConversion(BinaryConversion):
             dict['infohash'] = infohash
         returnValue((encode(dict),))
 
+    @inlineCallbacks
     def _decode_comment(self, placeholder, offset, data):
         try:
             offset, dic = decode(data, offset)
@@ -210,7 +211,7 @@ class ChannelConversion(BinaryConversion):
 
         if playlist_mid and playlist_global_time:
             try:
-                packet_id, packet, message_name = self._get_message(playlist_global_time, playlist_mid)
+                packet_id, packet, message_name = yield self._get_message(playlist_global_time, playlist_mid)
                 playlist = Packet(self._community.get_meta_message(message_name), packet, packet_id)
             except DropPacket:
                 member = self._community.get_member(mid=playlist_mid)
@@ -223,7 +224,7 @@ class ChannelConversion(BinaryConversion):
         infohash = dic.get("infohash", None)
         if infohash and not (isinstance(infohash, str) and len(infohash) == 20):
             raise DropPacket("Invalid 'infohash' type or value")
-        return offset, placeholder.meta.payload.implement(text, timestamp, reply_to_mid, reply_to_global_time, reply_after_mid, reply_after_global_time, playlist, infohash)
+        returnValue((offset, placeholder.meta.payload.implement(text, timestamp, reply_to_mid, reply_to_global_time, reply_after_mid, reply_after_global_time, playlist, infohash)))
 
     def _encode_moderation(self, message):
         dict = {"text": message.payload.text,
@@ -234,6 +235,7 @@ class ChannelConversion(BinaryConversion):
         dict["cause-global-time"] = message.payload.cause_global_time
         return encode(dict),
 
+    @inlineCallbacks
     def _decode_moderation(self, placeholder, offset, data):
         try:
             offset, dic = decode(data, offset)
@@ -267,7 +269,7 @@ class ChannelConversion(BinaryConversion):
             raise DropPacket("Invalid 'cause-global-time' type")
 
         try:
-            packet_id, packet, message_name = self._get_message(cause_global_time, cause_mid)
+            packet_id, packet, message_name = yield self._get_message(cause_global_time, cause_mid)
             cause_packet = Packet(self._community.get_meta_message(message_name), packet, packet_id)
 
         except DropPacket:
@@ -276,7 +278,7 @@ class ChannelConversion(BinaryConversion):
                 raise DelayPacketByMissingMember(self._community, cause_mid)
             raise DelayPacketByMissingMessage(self._community, member, cause_global_time)
 
-        return offset, placeholder.meta.payload.implement(text, timestamp, severity, cause_packet)
+        returnValue((offset, placeholder.meta.payload.implement(text, timestamp, severity, cause_packet)))
 
     def _encode_mark_torrent(self, message):
         dict = {"infohash": message.payload.infohash,
@@ -328,6 +330,7 @@ class ChannelConversion(BinaryConversion):
 
         returnValue((encode(dict),))
 
+    @inlineCallbacks
     def _decode_modification(self, placeholder, offset, data):
         try:
             offset, dic = decode(data, offset)
@@ -365,7 +368,7 @@ class ChannelConversion(BinaryConversion):
             raise DropPacket("Invalid 'modification-on-global-time' type")
 
         try:
-            packet_id, packet, message_name = self._get_message(modification_on_global_time, modification_on_mid)
+            packet_id, packet, message_name = yield self._get_message(modification_on_global_time, modification_on_mid)
             modification_on = Packet(self._community.get_meta_message(message_name), packet, packet_id)
         except DropPacket:
             member = self._community.get_member(mid=modification_on_mid)
@@ -382,25 +385,26 @@ class ChannelConversion(BinaryConversion):
             raise DropPacket("Invalid 'prev-modification-global-time' type")
 
         try:
-            packet_id, packet, message_name = self._get_message(prev_modification_global_time, prev_modification_mid)
+            packet_id, packet, message_name = yield self._get_message(prev_modification_global_time, prev_modification_mid)
             prev_modification_packet = Packet(self._community.get_meta_message(message_name), packet, packet_id)
         except:
             prev_modification_packet = None
 
-        return offset, placeholder.meta.payload.implement(modification_type, modification_value, timestamp, modification_on, prev_modification_packet, prev_modification_mid, prev_modification_global_time)
+        returnValue((offset, placeholder.meta.payload.implement(modification_type, modification_value, timestamp, modification_on, prev_modification_packet, prev_modification_mid, prev_modification_global_time)))
 
     @inlineCallbacks
     def _encode_playlist_torrent(self, message):
         playlist = yield message.payload.playlist.load_message()
         returnValue((pack('!20s20sQ', message.payload.infohash, playlist.authentication.member.mid, playlist.distribution.global_time),))
 
+    @inlineCallbacks
     def _decode_playlist_torrent(self, placeholder, offset, data):
         if len(data) < offset + 48:
             raise DropPacket("Unable to decode the payload")
 
         infohash, playlist_mid, playlist_global_time = unpack_from('!20s20sQ', data, offset)
         try:
-            packet_id, packet, message_name = self._get_message(playlist_global_time, playlist_mid)
+            packet_id, packet, message_name = yield self._get_message(playlist_global_time, playlist_mid)
 
         except DropPacket:
             member = self._community.dispersy.get_member(mid=playlist_mid)
@@ -409,25 +413,26 @@ class ChannelConversion(BinaryConversion):
             raise DelayPacketByMissingMessage(self._community, member, playlist_global_time)
 
         playlist = Packet(self._community.get_meta_message(message_name), packet, packet_id)
-        return offset + 48, placeholder.meta.payload.implement(infohash, playlist)
+        returnValue((offset + 48, placeholder.meta.payload.implement(infohash, playlist)))
 
+    @inlineCallbacks
     def _get_message(self, global_time, mid):
         assert isinstance(global_time, (int, long))
         assert isinstance(mid, str)
         assert len(mid) == 20
         if global_time and mid:
             try:
-                packet_id, packet, message_name = self._community.dispersy.database.execute(
+                packet_id, packet, message_name = yield self._community.dispersy.database.fetchone(
                     u""" SELECT sync.id, sync.packet, meta_message.name
                     FROM sync
                     JOIN member ON (member.id = sync.member)
                     JOIN meta_message ON (meta_message.id = sync.meta_message)
                     WHERE sync.community = ? AND sync.global_time = ? AND member.mid = ?""",
-                    (self._community.database_id, global_time, buffer(mid))).next()
-            except StopIteration:
+                    (self._community.database_id, global_time, buffer(mid)))
+            except TypeError:
                 raise DropPacket("Missing message")
 
-            return packet_id, str(packet), message_name
+            returnValue((packet_id, str(packet), message_name))
 
     def _encode_missing_channel(self, message):
         return pack('!B', int(message.payload.includeSnapshot)),
