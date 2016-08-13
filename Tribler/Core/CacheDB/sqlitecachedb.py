@@ -1,5 +1,6 @@
 # Written by Jie Yang
 # see LICENSE.txt for license information
+import inspect
 import logging
 import os
 from base64 import encodestring, decodestring
@@ -7,6 +8,8 @@ from threading import currentThread, RLock
 
 import apsw
 from apsw import CantOpenError, SQLError
+
+import time
 from twisted.python.threadable import isInIOThread
 
 from Tribler.dispersy.taskmanager import TaskManager
@@ -256,10 +259,28 @@ class SQLiteCacheDB(TaskManager):
     def set_show_sql(self, switch):
         self._show_execute = switch
 
+    def write_time(self, duration, db_operation, caller):
+        end = time.time()
+        if caller is not None:
+            with open("db_calls_sync_tribler.txt", "a") as myfile:
+                myfile.write("%s %s %s %s %s %s\n" % (end, db_operation, caller[0], caller[1], caller[2], duration))
+
+    def find_caller(self, start):
+        """
+        Get's the caller of a function
+        :param start: From which frame on we should search.
+        :return: A tuple (function name, line in code) or none
+        """
+        stack = inspect.stack()
+        for i in range(start, len(stack)):
+            if (any(x in stack[i][1] for x in ["tribler", "dispersy"])):
+                return (stack[i][3], stack[i][2], stack[i][1])
+
     # --------- generic functions -------------
 
     @blocking_call_on_reactor_thread
     def execute(self, sql, args=None):
+        start = time.time()
         cur = self.get_cursor()
 
         if self._show_execute:
@@ -282,9 +303,12 @@ class SQLiteCacheDB(TaskManager):
                                        thread_name, type(sql), sql, args)
 
             raise msg
+        finally:
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
 
     @blocking_call_on_reactor_thread
     def executemany(self, sql, args=None):
+        start = time.time()
         self._should_commit = True
 
         cur = self.get_cursor()
@@ -298,6 +322,7 @@ class SQLiteCacheDB(TaskManager):
             else:
                 result = cur.executemany(sql, args)
 
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
             return result
 
         except Exception as msg:
@@ -315,20 +340,24 @@ class SQLiteCacheDB(TaskManager):
         self.execute(sql, args)
 
     def insert_or_ignore(self, table_name, **argv):
+        start = time.time()
         if len(argv) == 1:
             sql = u'INSERT OR IGNORE INTO %s (%s) VALUES (?);' % (table_name, argv.keys()[0])
         else:
             questions = '?,' * len(argv)
             sql = u'INSERT OR IGNORE INTO %s %s VALUES (%s);' % (table_name, tuple(argv.keys()), questions[:-1])
         self.execute_write(sql, argv.values())
+        self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
 
     def insert(self, table_name, **argv):
+        start = time.time()
         if len(argv) == 1:
             sql = u'INSERT INTO %s (%s) VALUES (?);' % (table_name, argv.keys()[0])
         else:
             questions = '?,' * len(argv)
             sql = u'INSERT INTO %s %s VALUES (%s);' % (table_name, tuple(argv.keys()), questions[:-1])
         self.execute_write(sql, argv.values())
+        self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
 
     # TODO: may remove this, only used by test_sqlitecachedb.py
     def insertMany(self, table_name, values, keys=None):
@@ -342,6 +371,7 @@ class SQLiteCacheDB(TaskManager):
         self.executemany(sql, values)
 
     def update(self, table_name, where=None, **argv):
+        start = time.time()
         assert len(argv) > 0, 'NO VALUES TO UPDATE SPECIFIED'
         if len(argv) > 0:
             sql = u'UPDATE %s SET ' % table_name
@@ -357,8 +387,10 @@ class SQLiteCacheDB(TaskManager):
             if where is not None:
                 sql += u' WHERE %s' % where
             self.execute_write(sql, arg)
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
 
     def delete(self, table_name, **argv):
+        start = time.time()
         sql = u'DELETE FROM %s WHERE ' % table_name
         arg = []
         for k, v in argv.iteritems():
@@ -370,6 +402,7 @@ class SQLiteCacheDB(TaskManager):
                 arg.append(v)
         sql = sql[:-5]
         self.execute_write(sql, arg)
+        self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
 
     # -------- Read Operations --------
     def size(self, table_name):
@@ -379,8 +412,10 @@ class SQLiteCacheDB(TaskManager):
 
     @blocking_call_on_reactor_thread
     def fetchone(self, sql, args=None):
+        start = time.time()
         find = self.execute_read(sql, args)
         if not find:
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
             return
         else:
             find = list(find)
@@ -390,19 +425,25 @@ class SQLiteCacheDB(TaskManager):
                         u"FetchONE resulted in many more rows than one, consider putting a LIMIT 1 in the sql statement %s, %s", sql, len(find))
                 find = find[0]
             else:
+                self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
                 return
         if len(find) > 1:
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
             return find
         else:
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
             return find[0]
 
     @blocking_call_on_reactor_thread
     def fetchall(self, sql, args=None):
+        start = time.time()
         res = self.execute_read(sql, args)
         if res is not None:
             find = list(res)
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
             return find
         else:
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
             return []  # should it return None?
 
     def getOne(self, table_name, value_name, where=None, conj=u"AND", **kw):
