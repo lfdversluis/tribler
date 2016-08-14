@@ -304,7 +304,7 @@ class SQLiteCacheDB(TaskManager):
 
             raise msg
         finally:
-            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(4))
 
     @blocking_call_on_reactor_thread
     def executemany(self, sql, args=None):
@@ -322,7 +322,7 @@ class SQLiteCacheDB(TaskManager):
             else:
                 result = cur.executemany(sql, args)
 
-            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(4))
             return result
 
         except Exception as msg:
@@ -415,7 +415,7 @@ class SQLiteCacheDB(TaskManager):
         start = time.time()
         find = self.execute_read(sql, args)
         if not find:
-            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(4))
             return
         else:
             find = list(find)
@@ -425,13 +425,13 @@ class SQLiteCacheDB(TaskManager):
                         u"FetchONE resulted in many more rows than one, consider putting a LIMIT 1 in the sql statement %s, %s", sql, len(find))
                 find = find[0]
             else:
-                self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
+                self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(4))
                 return
         if len(find) > 1:
-            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(4))
             return find
         else:
-            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(4))
             return find[0]
 
     @blocking_call_on_reactor_thread
@@ -440,10 +440,10 @@ class SQLiteCacheDB(TaskManager):
         res = self.execute_read(sql, args)
         if res is not None:
             find = list(res)
-            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(4))
             return find
         else:
-            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(3))
+            self.write_time(time.time() - start, inspect.stack()[0][3], self.find_caller(4))
             return []  # should it return None?
 
     def getOne(self, table_name, value_name, where=None, conj=u"AND", **kw):
